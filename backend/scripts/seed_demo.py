@@ -31,7 +31,12 @@ def seed():
             db.flush();libraries.append(library)
         if not db.query(UnmixRun).filter_by(name="校准库 · 首批三样本解混").first():
             library=libraries[0];ids=[s.id for s in db.query(MixtureSample).filter_by(library_id=library.id).order_by(MixtureSample.code).limit(3)];snapshot=create_snapshot(db,library,ids);result=analyze_unmix(snapshot,.005,80,2026)
-            run=UnmixRun(name="校准库 · 首批三样本解混",library_id=library.id,sample_ids=ids,noise_sigma=.005,repeats=80,seed=2026,input_snapshot=snapshot,status="completed",result=result,owner="苏砚 · 光谱研究员");db.add(run);db.flush()
+            run=UnmixRun(name="校准库 · 首批三样本解混",library_id=library.id,sample_ids=ids,noise_sigma=.005,repeats=80,seed=2026,band_exclusions=[],input_snapshot=snapshot,status="completed",result=result,owner="苏砚 · 光谱研究员");db.add(run);db.flush()
             db.add(ReplicationNote(run_id=run.id,title="首批复配观察记录",interpretation="配比符合非负与和为1约束；分位范围条件于固定端元与给定sigma，不保证真配比覆盖。",proposal="按点估计做小样复配并重新测谱，另行评估端元校准误差和模型失配。",status="approved",owner="苏砚 · 光谱研究员",reviewer="贺青 · 材料负责人",review_note="批准研究归档；复配比例仍须独立实验验证，不把条件扰动范围当作成分真值保证。"))
+        if not db.query(UnmixRun).filter_by(name="校准库 · 排除污染波段解混示例").first():
+            library=libraries[0];ids=[s.id for s in db.query(MixtureSample).filter_by(library_id=library.id).order_by(MixtureSample.code).limit(3)];snapshot=create_snapshot(db,library,ids)
+            exclusions=[{"wavelength":650.0,"reason":"650nm探测器边缘杂散光污染"},{"wavelength":675.0,"reason":"675nm长波端杂散光污染"}]
+            result=analyze_unmix(snapshot,.005,80,2026,exclusions)
+            run=UnmixRun(name="校准库 · 排除污染波段解混示例",library_id=library.id,sample_ids=ids,noise_sigma=.005,repeats=80,seed=2026,band_exclusions=exclusions,input_snapshot=snapshot,status="completed",result=result,owner="苏砚 · 光谱研究员");db.add(run)
         db.commit();print(json.dumps({m.__tablename__:db.query(m).count() for m in [User,SpectralLibrary,Endmember,MixtureSample,UnmixRun,ReplicationNote]},ensure_ascii=False))
 if __name__=="__main__":seed()

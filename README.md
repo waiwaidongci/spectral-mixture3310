@@ -36,13 +36,13 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 ## 六页与实体
 
-首页、端元与样本、解混配置、配比与残差、复配审阅、研究留痕。五个业务实体 `SpectralLibrary / Endmember / MixtureSample / UnmixRun / ReplicationNote` 均具备表、model、schema、service、route、前端API、store与页面/组件；另有User/Audit。输入库/端元/观测向量在运行创建时冻结，后续批注不改历史结果。
+首页、端元与样本、解混配置、配比与残差、复配审阅、研究留痕。五个业务实体 `SpectralLibrary / Endmember / MixtureSample / UnmixRun / ReplicationNote` 均具备表、model、schema、service、route、前端API、store与页面/组件；另有User/Audit。`UnmixRun.band_exclusions` 以JSON冻结 `{wavelength, reason}` 排除规则。输入库/端元/观测向量与排除规则在运行创建时冻结，后续批注或规则修改不改历史结果。
 
 三个库各40混合样本、4端元×12波段，共120样本/12端元。LS-A可辨识，LS-B近共线拒绝，LS-C含10份偏离线性模型样本。所有演示数据均为固定种子的合成谱，不是材料实测。真配比未提供给算法。连续标量 `noise_sigma` 使用MySQL DOUBLE，光谱/比例数组使用JSON双精度浮点，避免单精度改变输入。
 
 ## 算法与边界
 
-令A为“波段×端元”矩阵、y为混合谱，求 `min ||Aw-y||²`，满足 `w>=0, 1ᵀw=1`。限制2–6端元、2–64波段。枚举最多63个非空支持集S，对每个支持集求等式约束KKT解：
+令A为“波段×端元”矩阵、y为混合谱，求 `min ||Aw-y||²`，满足 `w>=0, 1ᵀw=1`。限制2–6端元、2–64波段。研究员可在配置页按波长勾选杂散光污染波段并逐波段填写原因；至少保留2个波段。配比求解、KKT校验、条件噪声重拟合、RSS/RMSE与高残差判定全部只在保留波段上进行；可辨识性检查针对保留波段矩阵，排除导致增广秩亏或条件数超过1e6时在入队预检（422）与worker两处拒绝计算，不输出貌似唯一的配比。被排除波段不参与拟合，但用保留波段得到的配比回乘完整端元矩阵给出全谱重建与全谱残差，并在图谱、明细表中灰带标注排除原因。枚举最多63个非空支持集S，对每个支持集求等式约束KKT解：
 
 ```text
 [ 2 A_Sᵀ A_S   1 ] [w_S] = [2 A_Sᵀ y]
@@ -55,7 +55,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 第二算法条件于固定A及用户给定sigma：每次独立生成 `y*=y+N(0,sigma² I)`，重新求同一约束解。根SeedSequence按样本自然键排序派生独立子流，保存全部重复配比/RSS；2.5/97.5%分位用线性插值。sigma取0–0.2反射率，0表示无扰动、范围退化。每次选1–6样本、20–120次，样本数×重复数≤480以限制计算量。这是给观测加噪的条件扰动情景，不是真实成分的覆盖保证，不涵盖端元校准误差、相关噪声、非线性或模型失配。高残差标记RMSE>max(3sigma,1e−8)仅为检查参考，不是显著性或真实性检验。
 
-当前算法版本为 `simplex-nullspace-kkt-gaussian-v2`（正交零空间SVD求解、无RSS绝对并列截断）。SHA256覆盖完整库/波长/端元/样本/批注快照、sigma、重复数、种子与算法版本。自然键排序使输入行序变化不改变结果；观测、波长、批注或参数改变会改变指纹。结果JSON及全部重复落在共享产物卷；数据库保存同一结果，CSV包含点估计、条件上下分位、RSS/RMSE及指纹。
+当前算法版本为 `simplex-nullspace-kkt-gaussian-v3`（v3在v2正交零空间SVD求解、无RSS绝对并列截断基础上增加按波长排除污染波段）。SHA256覆盖完整库/波长/端元/样本/批注快照、归一化排除规则（波长+原因，按波长排序）、保留波长、sigma、重复数、种子与算法版本。自然键排序使输入行序变化不改变结果；观测、波长、批注、排除规则或参数改变会改变指纹。排除规则在创建研究时冻结到运行行与结果JSON，规则变化只能产生新研究，既有运行的结果、指纹与CSV不被改写；无排除的研究与旧流程完全兼容（旧库行为空列表，CSV保持原11列）。结果JSON及全部重复落在共享产物卷；数据库保存同一结果。无排除时CSV保持原列；含排除时追加 `retained_wavelengths_nm` 与 `excluded_wavelengths_nm_reason` 两列，逐行标明配比来自哪些保留波段、哪些波段因何原因排除。
 
 ## 本地开发与结构
 

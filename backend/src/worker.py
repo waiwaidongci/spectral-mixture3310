@@ -16,7 +16,7 @@ while True:
         if not run or run.status!=RunStatus.QUEUED:continue
         run.status=RunStatus.RUNNING;db.commit()
         try:
-            run.result=analyze_unmix(run.input_snapshot,run.noise_sigma,run.repeats,run.seed);run.status=RunStatus.COMPLETED
+            run.result=analyze_unmix(run.input_snapshot,run.noise_sigma,run.repeats,run.seed,run.band_exclusions);run.status=RunStatus.COMPLETED
             Path(f"/artifacts/run-{run.id}.json").write_text(json.dumps(run.result,ensure_ascii=False));log(db,"worker","unmix.completed",run.id)
         except Exception as e:run.status=RunStatus.FAILED;run.error=str(e);traceback.print_exc()
         db.commit()

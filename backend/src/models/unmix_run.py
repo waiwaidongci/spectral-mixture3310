@@ -11,6 +11,7 @@ class UnmixRun(Base):
     noise_sigma:Mapped[float]=mapped_column(Double)
     repeats:Mapped[int]
     seed:Mapped[int]
+    band_exclusions:Mapped[list]=mapped_column(JSON,default=list)
     input_snapshot:Mapped[dict]=mapped_column(JSON)
     status:Mapped[str]=mapped_column(String(24),default="queued")
     result:Mapped[dict]=mapped_column(JSON,default=dict)
